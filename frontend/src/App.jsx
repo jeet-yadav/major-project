@@ -6,8 +6,15 @@ function App() {
   const [result, setResult] = useState("");
 
   const analyzeSentiment = async () => {
-    // const response = await axios.post("http://localhost:5000/predict", { text });
-    // setResult(response.data.sentiment);
+    try {
+      const response = await axios.post("http://localhost:5000/api/sentiment", {
+        tweet: text,
+      });
+      setResult(`Score: ${response.data.score}, Comparative: ${response.data.comparative}`);
+    } catch (error) {
+      console.error("Error analyzing sentiment:", error);
+      setResult("Error occurred");
+    }
   };
 
   return (
