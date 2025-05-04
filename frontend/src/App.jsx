@@ -7,10 +7,11 @@ function App() {
 
   const analyzeSentiment = async () => {
     try {
-      const response = await axios.post("http://localhost:5000/api/sentiment", {
+      const response = await axios.post("http://127.0.0.1:5000/predict", {
         tweet: text,
       });
-      setResult(`Score: ${response.data.score}, Comparative: ${response.data.comparative}`);
+      console.log("Response from server:", response.data);
+      setResult(`${response.data.sentiment}`);
     } catch (error) {
       console.error("Error analyzing sentiment:", error);
       setResult("Error occurred");
