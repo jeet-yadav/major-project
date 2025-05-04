@@ -1,9 +1,9 @@
 from flask import Flask, request, jsonify
-from flask_cors import CORS
+# from flask_cors import CORS
 import joblib
 
 app = Flask(__name__)
-CORS(app)
+# CORS(app)
 
 # Load model and vectorizer
 model = joblib.load("model/svm.pkl")
