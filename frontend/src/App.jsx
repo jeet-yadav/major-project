@@ -2,16 +2,12 @@ import React, { useState } from "react";
 import axios from "axios";
 
 function App() {
-  const flag = true;
   const [text, setText] = useState("");
   const [result, setResult] = useState("");
 
   const analyzeSentiment = async () => {
     // const response = await axios.post("http://localhost:5000/predict", { text });
     // setResult(response.data.sentiment);
-    setResult((prevResult) =>
-      prevResult === "positive" ? "negative" : "positive"
-    );
   };
 
   return (
