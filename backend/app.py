@@ -31,6 +31,39 @@ def load_model():
         return model, vectorizer
     return None, None
 
+model = None
+vectorizer = None
+
+def load_existing_model():
+    global model, vectorizer
+    try:
+        if os.path.exists('model.pkl') and os.path.exists('vectorizer.pkl'):
+            model = pickle.load(open('model.pkl', 'rb'))
+            vectorizer = pickle.load(open('vectorizer.pkl', 'rb'))
+            print("Model and vectorizer loaded successfully!")
+            return True
+        else:
+            print("Model or vectorizer not found.")
+            return False
+    except Exception as e:
+        print(f"Error loading model: {str(e)}")
+        return False
+
+# Try to load model at startup, or train if files don't exist
+if not load_existing_model():
+    print("Attempting to train model from default dataset...")
+    try:
+        # Import the training function
+        from train_model import train_model
+        # Try to train using the default Tweets.csv
+        if os.path.exists('Tweets.csv'):
+            train_model('Tweets.csv')
+            load_existing_model()
+        else:
+            print("Tweets.csv not found in the current directory.")
+    except Exception as e:
+        print(f"Error training model: {str(e)}")
+
 @app.route('/')
 def home():
     return """
@@ -46,9 +79,9 @@ def home():
 
 @app.route('/predict', methods=['POST'])
 def predict():
-    # Check if model is loaded
-    model, vectorizer = load_model()
-    if model is None:
+    global model, vectorizer
+    
+    if model is None or vectorizer is None:
         return jsonify({"error": "Model not loaded. Please train the model first."}), 500
     
     # Get tweet from request
@@ -75,33 +108,81 @@ def predict():
         "sentiment_label": "positive" if prediction == 1 else "negative"
     })
 
+
 @app.route('/airlines', methods=['GET'])
 def airlines():
-    # In a real implementation, this would query your dataset
-    airlines_list = ['US Airways', 'United', 'American', 'Southwest', 'Delta', 'Virgin America']
-    return jsonify({"airlines": airlines_list})
+    try:
+        # Load the dataset if it exists
+        if os.path.exists('Tweets.csv'):
+            data = pd.read_csv('Tweets.csv')
+            airlines_list = data['airline'].unique().tolist()
+            return jsonify({"airlines": airlines_list})
+        else:
+            # Fallback to hardcoded list if dataset not available
+            airlines_list = ['US Airways', 'United', 'American', 'Southwest', 'Delta', 'Virgin America']
+            return jsonify({"airlines": airlines_list})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/stats', methods=['GET'])
 def stats():
-    # In a real implementation, this would be based on your actual model metrics
-    return jsonify({
-        "model_type": "Support Vector Machine (SVM)",
-        "accuracy": 0.83,  # This should be your actual model accuracy
-        "dataset_size": 14640  # This should be your actual dataset size
-    })
+    global model, vectorizer
+    
+    try:
+        # Load the dataset if it exists
+        if os.path.exists('Tweets.csv'):
+            data = pd.read_csv('Tweets.csv')
+            # Filter out neutral sentiment as we're only handling binary classification
+            data = data[data['airline_sentiment'] != 'neutral']
+            
+            stats_data = {
+                "model_type": "Support Vector Machine (SVM)",
+                "dataset_size": len(data),
+                "airlines_count": len(data['airline'].unique()),
+                "positive_tweets": len(data[data['airline_sentiment'] == 'positive']),
+                "negative_tweets": len(data[data['airline_sentiment'] == 'negative']),
+                "accuracy": 0.83  # This is placeholder - in a real implementation you'd use cross-validation
+            }
+            
+            # Add model info if model is loaded
+            if model is not None:
+                stats_data["model_loaded"] = True
+            else:
+                stats_data["model_loaded"] = False
+                
+            return jsonify(stats_data)
+        else:
+            # Return basic info if dataset not available
+            return jsonify({
+                "model_type": "Support Vector Machine (SVM)",
+                "accuracy": 0.83,  # Placeholder accuracy
+                "dataset_size": 14640,  # Placeholder dataset size
+                "model_loaded": model is not None
+            })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/train', methods=['POST'])
-def train_model():
-    """Endpoint to train and save the model from CSV data"""
+def train_model_endpoint():
+    """Endpoint to train and save the model from local CSV data"""
+    global model, vectorizer
+    
     try:
         # Check if file was uploaded
-        if 'file' not in request.files:
-            return jsonify({"error": "No file provided"}), 400
-        
-        file = request.files['file']
+        if 'file' in request.files:
+            file = request.files['file']
+            # Save the uploaded file temporarily
+            temp_file_path = 'temp_upload.csv'
+            file.save(temp_file_path)
+            file_path = temp_file_path
+        else:
+            # Use the local Tweets.csv file
+            file_path = 'Tweets.csv'
+            if not os.path.exists(file_path):
+                return jsonify({"error": f"No file uploaded and {file_path} not found"}), 400
         
         # Load data
-        data = pd.read_csv(file)
+        data = pd.read_csv(file_path)
         
         # Basic preprocessing (similar to what's in the notebook)
         # Drop neutral sentiment
@@ -126,10 +207,15 @@ def train_model():
         pickle.dump(model, open('model.pkl', 'wb'))
         pickle.dump(vectorizer, open('vectorizer.pkl', 'wb'))
         
+        # Clean up temporary file if it exists
+        if 'file' in request.files and os.path.exists(temp_file_path):
+            os.remove(temp_file_path)
+        
         return jsonify({"success": "Model trained and saved successfully!"})
     
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=True)
